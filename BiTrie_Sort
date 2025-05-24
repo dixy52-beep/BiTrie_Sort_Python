@@ -1,0 +1,149 @@
+import math
+import time
+
+
+class TrieNode:
+    """
+    Represents a node in the Bitrie.
+    Each node has two children pointers (for bit 0 and bit 1)
+    and a count to track how many numbers end at this node.
+    """
+    def __init__(self):
+        # children[0] for bit 0, children[1] for bit 1
+        self.children = [None, None]
+        # Number of times a number ends at this node (for duplicates)
+        self.count = 0
+
+def bitrie_sort(arr):
+    """
+    Sorts a list of non-negative integers using the Bitrie Sort algorithm.
+    This version uses an Iterative Depth-First Traversal (DFS) using an
+    explicit stack to avoid potential call stack depth limits of recursion
+    while maintaining O(K) space for traversal state.
+
+    Args:
+        arr (list[int]): A list of non-negative integers to be sorted.
+
+    Returns:
+        list[int]: A new list containing the sorted integers.
+    """
+    if not arr:
+        return []
+
+    # Step 1: Determine the maximum number of bits needed for any integer
+    max_val = 0
+    for num in arr:
+        if num > max_val:
+            max_val = num
+
+    # max_val.bit_length() gives the number of bits required to represent max_val.
+    # If max_val is 0, bit_length() is 0, but we still need 1 bit to represent '0'.
+    max_bits_needed = max(1, max_val.bit_length())
+
+    # Step 2: Build the Bitrie
+    root = TrieNode()
+    for num in arr:
+        current_node = root
+        for i in range(max_bits_needed - 1, -1, -1):
+            bit_value = (num >> i) & 1
+            if current_node.children[bit_value] is None:
+                current_node.children[bit_value] = TrieNode()
+            current_node = current_node.children[bit_value]
+        current_node.count += 1
+
+    # Step 3: Traverse the Bitrie to get sorted numbers (Iterative Depth-First Traversal)
+    sorted_result = []
+    stack = []  # Explicit stack for iterative DFS
+
+    current_node = root
+    current_prefix = 0
+
+    # Perform iterative in-order traversal
+    while current_node is not None or stack:
+        # Traverse left subtree: push nodes and their prefixes onto stack
+        while current_node is not None:
+            # Push the current node and the prefix leading *to* it
+            stack.append({'node': current_node, 'prefix': current_prefix})
+            # Move to the left child (bit 0) and update prefix for the child
+            current_node = current_node.children[0]
+            current_prefix = (current_prefix << 1) | 0 # Appending a 0 bit
+
+        # No more left children, pop the last node visited
+        popped = stack.pop()
+        popped_node = popped['node']
+        popped_prefix = popped['prefix']
+
+        # Process the popped node: if it marks the end of numbers, add them
+        # This happens after visiting the left subtree, ensuring sorted order
+        if popped_node.count > 0:
+            for _ in range(popped_node.count):
+                sorted_result.append(popped_prefix)
+
+        # Move to the right child (bit 1) and set up for traversing its subtree
+        current_node = popped_node.children[1]
+        # The prefix for the right child is the popped node's prefix with bit 1 appended
+        current_prefix = (popped_prefix << 1) | 1 # Appending a 1 bit
+
+    return sorted_result
+
+
+def main():
+    """
+    Runs various test cases for the bitrie_sort function and measures execution time.
+    """
+    test_cases = [
+        ("Empty list", [], []),
+        ("Single element", [5], [5]),
+        ("Basic unsorted with duplicates", [3, 1, 4, 1, 5, 9, 2, 6], [1, 1, 2, 3, 4, 5, 6, 9]),
+        ("All zeros", [0, 0, 0], [0, 0, 0]),
+        ("Mix with zero and small numbers", [7, 0, 3, 1], [0, 1, 3, 7]),
+        ("Already sorted", [1, 2, 3, 4, 5], [1, 2, 3, 4, 5]),
+        ("Reverse sorted", [5, 4, 3, 2, 1], [1, 2, 3, 4, 5]),
+        ("Large numbers", [1000000, 1, 500000, 10], [1, 10, 500000, 1000000]),
+        ("Mixed large/small with duplicates and zero", [10, 1, 100, 1, 0, 50, 100], [0, 1, 1, 10, 50, 100, 100]),
+        ("All same non-zero number", [7, 7, 7], [7, 7, 7]),
+        ("Numbers with high MSB differing", [128, 64, 32, 16, 8, 4, 2, 1], [1, 2, 4, 8, 16, 32, 64, 128]),
+        # Corrected list comprehensions for random numbers
+        ("Random numbers (1000 elements)",
+         [int(val) for val in (math.sin(i) * 100000 for i in range(1000)) if val >= 0], # Ensure non-negative
+         sorted([int(val) for val in (math.sin(i) * 100000 for i in range(1000)) if val >= 0])),
+        ("Random numbers (10000 elements)",
+         [int(val) for val in (math.cos(i) * 1000000 for i in range(10000)) if val >= 0], # Ensure non-negative
+         sorted([int(val) for val in (math.cos(i) * 1000000 for i in range(10000)) if val >= 0])),
+    ]
+
+    print("--- Bitrie Sort Test Suite ---")
+    print("-" * 30)
+
+    for i, (description, input_arr, expected_output) in enumerate(test_cases):
+        print(f"\nTest {i+1}: {description}")
+        # For large random test cases, print only a slice of input/output
+        display_input = input_arr if len(input_arr) < 50 else input_arr[:20] + ['...'] + input_arr[-20:]
+        display_output = expected_output if len(expected_output) < 50 else expected_output[:20] + ['...'] + expected_output[-20:]
+        print(f"Input: {display_input}")
+
+        start_time = time.perf_counter()
+        # Pass a copy to avoid modifying original if it's a mutable large list,
+        # though bitrie_sort creates a new list anyway.
+        sorted_arr = bitrie_sort(list(input_arr))
+        end_time = time.perf_counter()
+
+        elapsed_time_ms = (end_time - start_time) * 1000
+
+        print(f"Output: {sorted_arr if len(sorted_arr) < 50 else sorted_arr[:20] + ['...'] + sorted_arr[-20:]}")
+        print(f"Expected: {display_output}")
+        print(f"Time taken: {elapsed_time_ms:.4f} ms")
+
+        try:
+            assert sorted_arr == expected_output
+            print("Status: PASSED")
+        except AssertionError:
+            print(f"Status: FAILED - Output does not match expected!")
+            # Optionally, you might want to re-raise or exit on failure for CI/CD
+            # raise
+
+    print("\n" + "-" * 30)
+    print("All tests completed.")
+
+if __name__ == "__main__":
+    main()
